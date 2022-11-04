@@ -16,9 +16,19 @@ var authRouter = require('./routes/auth');
 const postsRouter = require('./routes/posts');
 const commentsRouter = require('./routes/comments');
 
+const corsOpt = {
+  allowHeaders: ['Content-Type', 'application/json'],
+  preflightContinue: 'true',
+};
+
 var app = express();
+app.options('*', cors(corsOpt));
 
 // view engine setup
+// app.use(function (req, res, next) {
+//   req.headers['content-type'] = 'application/json';
+//   next();
+// });
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
 
@@ -27,7 +37,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
-app.use(cors());
+
+app.use(cors(corsOpt));
 
 app.use('/', indexRouter);
 app.use('/auth', authRouter);

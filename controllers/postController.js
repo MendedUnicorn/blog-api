@@ -2,7 +2,7 @@ const Post = require('../models/post');
 const { body, validationResult } = require('express-validator');
 const async = require('async');
 const Comment = require('../models/comment');
-
+const jwt = require('jsonwebtoken');
 // Get all posts
 const get_posts_get = (req, res, next) => {
   //
@@ -19,8 +19,13 @@ exports.post_post = [
     if (!errors.isEmpty()) {
       return next(errors);
     }
+    // Retrieve ID from token in header and assign as poster
+    const id = jwt.verify(
+      req.headers.authorization.split(' ')[1],
+      process.env.SECRET_KEY
+    ).sub;
     const newPost = new Post({
-      user: '635fc74a0756de7dad44b796',
+      user: id,
       title: req.body.title,
       text: req.body.text,
       published: req.body.published,

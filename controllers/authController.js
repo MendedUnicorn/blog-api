@@ -50,7 +50,8 @@ exports.register = async (req, res, next) => {
 
 exports.login = async (req, res, next) => {
   const { email, username, password } = req.body;
-
+  let loginMethod = {};
+  // console.log('header', JSON.stringify(req.headers));
   if (email) {
     loginMethod = { email: email };
   } else if (username) {
@@ -67,8 +68,16 @@ exports.login = async (req, res, next) => {
             { sub: user._id, iss: 'mended' },
             process.env.SECRET_KEY
           );
-          console.log('the users nane', user, user.name);
-          return res.json({ message: 'Succesful login', token });
+          // console.log(
+          //   'the userstoken',
+          //   jwt.verify(token, process.env.SECRET_KEY).sub
+          // );
+          const { password, ...userDetails } = user.toObject();
+          return res.json({
+            message: 'Succesful login',
+            token,
+            user: userDetails,
+          });
         }
         return res.json({ message: 'Password not correct' });
       });
