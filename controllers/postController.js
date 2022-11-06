@@ -3,6 +3,10 @@ const { body, validationResult } = require('express-validator');
 const async = require('async');
 const Comment = require('../models/comment');
 const jwt = require('jsonwebtoken');
+const { castObject } = require('../models/user');
+const { json } = require('express');
+const validator = require('validator');
+
 // Get all posts
 const get_posts_get = (req, res, next) => {
   //
@@ -11,13 +15,20 @@ const get_posts_get = (req, res, next) => {
 exports.post_post = [
   // Sanetize
   //body('user').trim().isLength({ min: 2, max: 20 }).escape(),
-  body('title').trim().isLength({ min: 2, max: 100 }).escape(),
-  body('text').trim().isLength({ min: 10, max: 10000 }).escape(),
+  body('title', 'You need to use more than 2 characters')
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .escape(),
+  body('text', 'You need to use more than 10 characters')
+    .trim()
+    .isLength({ min: 10, max: 10000 })
+    .escape(),
 
   (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return next(errors);
+      console.log(errors.array()[0]);
+      return res.status(303).json(errors.array()[0]);
     }
     // Retrieve ID from token in header and assign as poster
     const id = jwt.verify(
@@ -63,8 +74,27 @@ exports.get_posts = async (req, res, next) => {
     },
     { $addFields: { comment_count: { $size: '$comment_count' } } },
   ]);
-  const p = await Post.populate(posts, 'user');
-  res.json(posts);
+  await Post.populate(posts, 'user');
+
+  // Check if person sending request was logged in - valid jwt token
+  try {
+    jwt.verify(req.headers.authorization.split(' ')[1], process.env.SECRET_KEY);
+    const unescapedPosts = posts.map((post) => {
+      const p = validator.unescape(post.text);
+      return { ...post, text: p };
+    });
+    console.log('unescaped', unescapedPosts);
+    res.json(unescapedPosts);
+  } catch (err) {
+    console.log('not auth');
+    const filteredPosts = posts.filter((post) => post.published);
+    const unescapedPosts = filteredPosts.map((post) => {
+      const p = validator.unescape(post.text);
+      return { ...post, text: p };
+    });
+
+    res.json(unescapedPosts);
+  }
 };
 
 exports.get_post = (req, res, next) => {
@@ -82,18 +112,24 @@ exports.get_post = (req, res, next) => {
     ],
     (err, result) => {
       if (err) return next(err);
-      res.json({ ...result[0], count: result[1] });
+      res.json({
+        ...result[0],
+        text: validator.unescape(result[0].text),
+        count: result[1],
+      });
     }
   );
 };
 
 exports.update_post = [
   async (req, res, next) => {
+    console.log('the req', req.body);
     try {
       const data = await Post.findById(req.params.postid);
       req.body.title = req.body.title || data.title;
       req.body.text = req.body.text || data.text;
-      req.body.published = req.body.published || data.published;
+      req.body.published = req.body.published ?? data.published;
+      console.log('assigned req', req.body);
       next();
     } catch (err) {
       return next(err);
@@ -103,9 +139,14 @@ exports.update_post = [
   body('text').trim().isLength({ min: 10, max: 10000 }).escape(),
 
   async (req, res, next) => {
+    // Retrieve ID from token in header and assign as poster
+    const id = jwt.verify(
+      req.headers.authorization.split(' ')[1],
+      process.env.SECRET_KEY
+    ).sub;
     const errors = validationResult(req);
     const updatedPost = new Post({
-      user: '635fc74a0756de7dad44b796',
+      user: id,
       title: req.body.title,
       text: req.body.text,
       published: req.body.published,
@@ -117,20 +158,35 @@ exports.update_post = [
       console.log(errors);
       return next(errors);
     }
-    Post.findByIdAndUpdate(req.params.postid, updatedPost, (err, data) => {
-      if (err) {
-        return next(err);
+    Post.findByIdAndUpdate(
+      req.params.postid,
+      updatedPost,
+      { new: true },
+      (err, data) => {
+        if (err) {
+          return next(err);
+        }
+        res.json(data);
       }
-      res.json(`Document has been updated to: ${data}`);
-    });
+    );
   },
 ];
 
 exports.delete_post = (req, res, next) => {
-  Post.findByIdAndDelete(req.params.postid, (err, data) => {
-    if (err) {
-      return next(err);
+  async.parallel(
+    {
+      postDelete: function (cb) {
+        Post.findByIdAndDelete(req.params.postid, { new: true }, cb);
+      },
+      commentsDelete: function (cb) {
+        Comment.deleteMany({ post: req.params.postid }, cb);
+      },
+    },
+    (err, data) => {
+      if (err) {
+        return next(err);
+      }
+      res.json(data);
     }
-    res.json(`The following document has been deleted ${data}`);
-  });
+  );
 };

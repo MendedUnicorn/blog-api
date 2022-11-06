@@ -21,7 +21,7 @@ exports.post_comment = [
       if (err) {
         return next(err);
       }
-      res.json(`Data was posted succesfully: ${data}`);
+      res.json(data);
     });
   },
 ];
@@ -43,6 +43,25 @@ exports.get_comment = (req, res, next) => {
     if (err) {
       return next(err);
     }
+    res.json(data);
+  });
+};
+
+exports.update_comment = (req, res, next) => {
+  Comment.findByIdAndUpdate(
+    req.params.commentid,
+    { removed: req.body.removed },
+    { new: true },
+    (err, doc) => {
+      if (err) return next(err);
+      res.json(doc);
+    }
+  );
+};
+
+exports.delete_comment = (req, res, next) => {
+  Comment.findByIdAndDelete(req.params.commentid, (err, data) => {
+    if (err) return next(err);
     res.json(data);
   });
 };

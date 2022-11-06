@@ -79,11 +79,13 @@ exports.login = async (req, res, next) => {
             user: userDetails,
           });
         }
-        return res.json({ message: 'Password not correct' });
+        return res
+          .status(403)
+          .json({ message: 'Password not correct', status: 403 });
       });
     }
     if (!user) {
-      return res.json({ message: 'User not found' });
+      return res.status(403).json({ message: 'User not found', status: 403 });
     }
   } catch (err) {
     return next(err);
